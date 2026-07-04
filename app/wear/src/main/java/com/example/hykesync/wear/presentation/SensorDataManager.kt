@@ -8,6 +8,7 @@ import android.hardware.SensorManager
 import android.util.Log
 import com.example.hykesync.domain.model.Telemetry
 import com.example.hykesync.wear.data.cache.WearTelemetryCacheStore
+import com.example.hykesync.wear.data.sensors.HeartRateSensorManager
 import com.google.android.gms.wearable.CapabilityClient
 import com.google.android.gms.wearable.DataMap
 import com.google.android.gms.wearable.Node
@@ -15,6 +16,7 @@ import com.google.android.gms.wearable.PutDataMapRequest
 import com.google.android.gms.wearable.Wearable
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -30,6 +32,8 @@ class SensorDataManager(context: Context) : SensorEventListener {
     private val nodeClient = Wearable.getNodeClient(context)
     private val cacheStore = WearTelemetryCacheStore(context)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val healthHeartRateManager = HeartRateSensorManager(context)
+    private var heartRateJob: Job? = null
 
     private val heartRateSensor: Sensor? = sensorManager?.getDefaultSensor(Sensor.TYPE_HEART_RATE)
     private val pressureSensor: Sensor? = sensorManager?.getDefaultSensor(Sensor.TYPE_PRESSURE)
@@ -75,8 +79,16 @@ class SensorDataManager(context: Context) : SensorEventListener {
         bodySensorsPermissionGranted = hasBodySensorsPermission
 
         if (hasBodySensorsPermission) {
-            registerSensor(heartRateSensor, "frecuencia cardiaca")
+            heartRateJob?.cancel()
+            heartRateJob = scope.launch {
+                healthHeartRateManager.getHeartRateFlow().collect { hr ->
+                    latestHeartRate = hr
+                    emitSensorState()
+                    sendLatestTelemetryIfNeeded()
+                }
+            }
         } else {
+            heartRateJob?.cancel()
             latestHeartRate = null
         }
 
@@ -92,15 +104,12 @@ class SensorDataManager(context: Context) : SensorEventListener {
 
     fun stop() {
         sensorManager?.unregisterListener(this)
+        heartRateJob?.cancel()
         isStarted = false
     }
 
     override fun onSensorChanged(event: SensorEvent) {
         when (event.sensor.type) {
-            Sensor.TYPE_HEART_RATE -> {
-                latestHeartRate = event.values.firstOrNull()
-            }
-
             Sensor.TYPE_PRESSURE -> {
                 latestPressure = event.values.firstOrNull()
                 latestAltitude = latestPressure?.let {

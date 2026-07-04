@@ -15,7 +15,7 @@
       </SelectionState>
       <SelectionState runConfigName="app.wear">
         <option name="selectionMode" value="DROPDOWN" />
-        <DropdownSelection timestamp="2026-06-22T23:39:41.973553600Z">
+        <DropdownSelection timestamp="2026-07-03T01:30:01.494853900Z">
           <Target type="DEFAULT_BOOT">
             <handle>
               <DeviceId pluginId="LocalEmulator" identifier="path=C:\Users\jmy36\.android\avd\Wear_OS_XL_Round.avd" />
